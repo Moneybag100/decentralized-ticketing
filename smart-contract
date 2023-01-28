@@ -1,0 +1,86 @@
+pragma solidity ^0.8.9;
+
+import "https://github.com/OpenZeppelin/openzeppelin-contracts/contracts/token/ERC721/ERC721.sol";
+import "https://github.com/Arachnid/solidity-qrcode/contracts/QRCode.sol";
+import "https://github.com/OpenZeppelin/openzeppelin-contracts/contracts/cryptography/ECDSA.sol";
+import "https://github.com/ipfs/interface-ipfs-core/contracts/IFPS.sol";
+
+
+// Define the ticket struct
+struct Ticket {
+    string ticketType; // ticket type
+    address owner; // owner of the ticket
+    uint256 validityPeriod; // validity period of the ticket
+    uint256 amount; //amount of ticket purchased
+    bool used; // whether the ticket has been used or not
+}
+
+// Define the ticket smart contract
+contract Ticketing is ERC721, QRCode {
+    // Define the mapping for storing the tickets
+    mapping(uint256 => Ticket) private tickets;
+    // Define the ticket count
+    uint256 private ticketCount = 0;
+    // Define the IPFS hash of the QR code
+    bytes32 private qrCodeIpfsHash;
+
+	//Event that is emitted when a ticket is minted
+	event TicketMinted(address sender, uint256 _tokenId, uint256 ticketCount);
+	// Event that is emitted when a ticket is transferred
+    event TicketTransferred(address from, address to, uint256 _tokenId);
+
+    // Function to mint a new ticket
+    function mintTicket(string memory _ticketType, uint256 _validityPeriod, uint256 amount) public {
+        require(msg.sender != address(0)); // only allow non-zero address
+        require(_validityPeriod > 0); // require a positive validity period
+        require(_amount > 0); //require a positive ticket amount
+
+        // Mint a new token and assign it to the sender's address
+        ticketCount++;
+        _mint(msg.sender, ticketCount);
+
+        /// Store the ticket information on IPFS
+        bytes32 ipfsHash = storeTicketInfoOnIpfs(_ticketType, msg.sender, _validityPeriod, _amount);
+
+        // Store the IPFS hash on the smart contract
+        tickets[ticketCount] = Ticket(ipfsHash, false);
+
+        // Generate the QR code for the ticket
+        bytes32 qrCodeData = generateQRCode(ipfsHash);
+        // Store the QR code on IPFS
+        qrCodeIpfsHash = storeQRCodeOnIpfs(qrCodeData);
+    }
+	//Function to transfer ticket 
+	function transferTicket(address _to, uint256 _tokenId bool used) public {
+	require(_tokenId > 0 && _tokenId <= ticketCount); // ensure the token ID is valid
+        require(ticket.owner == msg.sender); //ensure the owner is the sender of the ticket
+	require(!ticket.used); // ensure the ticket has not been used before
+        require(_to != address(0));
+}
+
+
+    // Function to retrieve the ticket information
+    function getTicketInfo(uint256 _tokenId) public view returns (bytes32, bool) {
+        require(_tokenId > 0 && _tokenId <= ticketCount); // ensure the token ID is valid
+
+        // Retrieve the ticket information from the mapping
+        return (tickets[_tokenId].ipfsHash, tickets[_tokenId].used);
+    }
+
+    // Function to check the ticket's validity and mark it as used
+    function useTicket(uint256 _tokenId) public {
+        require(_tokenId > 0 && _tokenId <= ticketCount); // ensure the token ID is valid
+
+        // Retrieve the ticket information from the mapping
+        Ticket storage ticket = tickets[_tokenId];
+
+        require(ticket.owner == msg.sender); // ensure the caller is the owner of the ticket
+        require(!ticket.used); // ensure the ticket has not been used before
+        require(getTicketValidityPeriod(ticket.ipfsHash) >= now); // ensure the ticket is still valid
+
+        // Mark the ticket as used
+        ticket.used = true;
+    }
+
+
+}
